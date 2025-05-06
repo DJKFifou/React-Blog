@@ -1,99 +1,120 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useState, Suspense } from "react";
+import useSWR from "swr";
+import Post from "../components/postItem.jsx";
+
+const fetcher = (url) =>
+  fetch(url).then((res) => {
+    if (!res.ok) {
+      throw new Error(`Erreur ${res.status} : ${res.statusText}`);
+    }
+    return res.json();
+  });
 
 export default function Home() {
-  const [posts, setPosts] = useState([]);
-  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
-  async function searchPost(formData) {
-    const inputResearchValue = formData.get("research")?.trim();
+  const postsPerPage = 20;
+  const skip = (currentPage - 1) * postsPerPage;
 
-    if (!inputResearchValue) {
-      setError("Please enter a search term.");
-      setPosts([]);
-      return;
-    }
+  const shouldFetch = searchTerm !== "";
 
-    try {
-      const response = await fetch(
-        `https://dummyjson.com/posts/search?q=${inputResearchValue}`
-      );
+  const { data, error, isLoading } = useSWR(
+    shouldFetch
+      ? `https://dummyjson.com/posts/search?q=${searchTerm}&limit=${postsPerPage}&skip=${skip}`
+      : null,
+    fetcher
+  );
 
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status} : ${response.statusText}`);
-      }
+  const totalPosts = data?.total || 0;
+  const totalPages = Math.ceil(totalPosts / postsPerPage);
 
-      const searchedPostsdata = await response.json();
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const value = formData.get("research")?.trim();
+    setCurrentPage(1);
+    setSearchTerm(value || "");
+  };
 
-      if (searchedPostsdata.posts.length === 0) {
-        setError("No posts found.");
-        setPosts([]);
-      } else {
-        setError(null);
-        setPosts(searchedPostsdata.posts);
-      }
-    } catch (err) {
-      setError("An error occurred during the search.");
-      setPosts([]);
-    }
-  }
+  const handlePageChange = (pageNumber) => {
+    const newPage = Math.max(1, Math.min(totalPages, pageNumber));
+    setCurrentPage(newPage);
+  };
 
   return (
-    <>
-      <section className="container mx-auto flex flex-col gap-6">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            searchPost(formData);
-          }}
-          className="flex gap-2"
+    <section className="container mx-auto flex flex-col gap-10 my-8">
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          type="text"
+          name="research"
+          className="border rounded-xs px-2 py-1"
+          placeholder="Search post..."
+        />
+        <button
+          type="submit"
+          className="text-white px-3 py-2 bg-black rounded-xs cursor-pointer"
         >
-          <input
-            type="text"
-            name="research"
-            className="border rounded-xs px-2 py-1"
-            placeholder="Search post..."
-          />
-          <button
-            type="submit"
-            className="text-white px-3 py-2 bg-black rounded-xs cursor-pointer"
-          >
-            Search
-          </button>
-        </form>
-        {error && <div className="font-semibold">{error}</div>}
-        {posts?.length > 0 && (
+          Search
+        </button>
+      </form>
+
+      {error && (
+        <div className="font-semibold text-red-500">
+          An error occurred during the search.
+        </div>
+      )}
+      {isLoading && <div className="text-gray-400">Loading posts…</div>}
+      {shouldFetch && !isLoading && data?.posts?.length === 0 && (
+        <div className="font-semibold">No posts found.</div>
+      )}
+
+      {data?.posts?.length > 0 && (
+        <>
           <ul className="flex flex-col gap-6">
-            {posts.map((post) => (
-              <li key={post.id} className=" border rounded-lg">
-                <Link
-                  to={`/posts/${post.id}`}
-                  className="flex flex-col gap-4 p-4"
-                >
-                  <h3 className="text-xl font-bold">{post.title}</h3>
-                  <p>{post.body}</p>
-                  <div className="flex gap-4">
-                    <p>
-                      <span className="font-bold">{post.views}</span> views
-                    </p>
-                    <p>
-                      <span className="font-bold">{post.reactions.likes}</span>{" "}
-                      likes
-                    </p>
-                    <p>
-                      <span className="font-bold">
-                        {post.reactions.dislikes}
-                      </span>{" "}
-                      dislikes
-                    </p>
-                  </div>
-                </Link>
-              </li>
-            ))}
+            {data.posts.map((post) => {
+              return (
+                <Suspense key={post.id} fallback={<div>Loading...</div>}>
+                  <Post data={post} />
+                </Suspense>
+              );
+            })}
           </ul>
-        )}
-      </section>
-    </>
+
+          <div className="flex justify-center items-center gap-2 mt-6">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer disabled:cursor-auto"
+            >
+              Previous
+            </button>
+            {[...Array(totalPages)].map((_, index) => {
+              const page = index + 1;
+              return (
+                <button
+                  key={page}
+                  onClick={() => handlePageChange(page)}
+                  className={`px-3 py-1 text-sm font-medium rounded cursor-pointer ${
+                    currentPage === page
+                      ? "bg-gray-500 text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {page}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer disabled:cursor-auto"
+            >
+              Next
+            </button>
+          </div>
+        </>
+      )}
+    </section>
   );
 }

@@ -1,71 +1,71 @@
-import { useParams } from "react-router";
-import { useState, useEffect } from "react";
+import { useParams, useLocation } from "react-router";
 import { useTheme } from "../contexts/LoginProvider.jsx";
+import useSWR from "swr";
+import { useEffect } from "react";
 
 export default function Post() {
-  let params = useParams();
+  const location = useLocation();
+  const params = useParams();
 
   const { user } = useTheme();
 
-  const [posts, setPosts] = useState([]);
+  const locationPostData = location.state?.postData;
+  const locationUserData = location.state?.userData;
 
-  const [comments, setComments] = useState([]);
-
-  const [postAuthor, setPostAuthor] = useState([]);
-
-  const post = posts.find((item) => item.id === parseInt(params.id));
+  const {
+    data: commentsData,
+    error,
+    isLoading,
+  } = useSWR(`https://dummyjson.com/posts/${params.id}/comments`, (url) =>
+    fetch(url).then((res) => res.json())
+  );
 
   useEffect(() => {
-    fetch("https://dummyjson.com/posts?limit=0")
-      .then((res) => res.json())
-      .then((postData) => {
-        setPosts(postData.posts);
-      });
-    fetch(`https://dummyjson.com/posts/${params.id}/comments`)
-      .then((res) => res.json())
-      .then((commentData) => {
-        setComments(commentData.comments);
-      });
-    fetch(`https://dummyjson.com/users/${params.id}`)
-      .then((res) => res.json())
-      .then((postAuthorData) => {
-        setPostAuthor(postAuthorData);
-      });
-  }, []);
+    console.log("Comments data:", commentsData);
+  }, [commentsData]);
 
-  if (!post) {
+  if (!locationPostData) {
     return <p>Post not found</p>;
   }
 
   return (
     <section className="container mx-auto flex flex-col gap-8">
       <div className="flex flex-col gap-6">
-        <h1 className="text-3xl font-bold">{post.title}</h1>
+        <h1 className="text-3xl font-bold">{locationPostData.title}</h1>
         <p>
           Écrit par{" "}
           <span className="font-bold">
-            {postAuthor.firstName} {postAuthor.lastName}
+            {locationUserData.firstName} {locationUserData.lastName}
           </span>
         </p>
-        <p>{post.body}</p>
+        <p>{locationPostData.body}</p>
         <div className="flex gap-4">
           <p>
-            <span className="font-bold">{post.views}</span> views
+            <span className="font-bold">{locationPostData.views}</span> views
           </p>
           <p>
-            <span className="font-bold">{post.reactions.likes}</span> likes
+            <span className="font-bold">
+              {locationPostData.reactions.likes}
+            </span>{" "}
+            likes
           </p>
           <p>
-            <span className="font-bold">{post.reactions.dislikes}</span>{" "}
+            <span className="font-bold">
+              {locationPostData.reactions.dislikes}
+            </span>{" "}
             dislikes
           </p>
         </div>
       </div>
       <div className="flex flex-col gap-4">
         <h3 className="text-2xl font-bold">Comments</h3>
-        {comments.length > 0 ? (
+        {isLoading ? (
+          <p className="text-sm text-gray-400">Loading comments…</p>
+        ) : error ? (
+          <p className="text-sm text-red-400">Failed to load comments</p>
+        ) : commentsData?.comments?.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {comments.map((comment) => {
+            {commentsData.comments.map((comment) => {
               const isCurrentUser =
                 user &&
                 `${user.firstName} ${user.lastName}` === comment.user.fullName;
@@ -84,7 +84,9 @@ export default function Post() {
                       {comment.user.fullName}
                     </h5>
                   </div>
-                  <p>{comment.likes} likes</p>
+                  <p>
+                    <span className="font-bold">{comment.likes}</span> likes
+                  </p>
                 </div>
               );
             })}

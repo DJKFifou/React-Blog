@@ -1,14 +1,8 @@
 import { useState, Suspense } from "react";
 import useSWR from "swr";
 import Post from "../components/postItem.jsx";
-
-const fetcher = (url) =>
-  fetch(url).then((res) => {
-    if (!res.ok) {
-      throw new Error(`Erreur ${res.status} : ${res.statusText}`);
-    }
-    return res.json();
-  });
+import Pagination from "../components/pagination.jsx";
+import SearchForm from "../components/searchForm.jsx";
 
 export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -23,13 +17,19 @@ export default function Home() {
     shouldFetch
       ? `https://dummyjson.com/posts/search?q=${searchTerm}&limit=${postsPerPage}&skip=${skip}`
       : null,
-    fetcher
+      (url) =>
+        fetch(url).then((res) => {
+          if (!res.ok) {
+            throw new Error(`Erreur ${res.status} : ${res.statusText}`);
+          }
+          return res.json();
+        })
   );
 
   const totalPosts = data?.total || 0;
   const totalPages = Math.ceil(totalPosts / postsPerPage);
 
-  const handleSubmit = (e) => {
+  const SearchPostSubmit = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const value = formData.get("research")?.trim();
@@ -44,20 +44,7 @@ export default function Home() {
 
   return (
     <section className="container mx-auto flex flex-col gap-10 my-8">
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          name="research"
-          className="border rounded-xs px-2 py-1"
-          placeholder="Search post..."
-        />
-        <button
-          type="submit"
-          className="text-white px-3 py-2 bg-black rounded-xs cursor-pointer"
-        >
-          Search
-        </button>
-      </form>
+      <SearchForm onSubmit={SearchPostSubmit} />
 
       {error && (
         <div className="font-semibold text-red-500">
@@ -80,39 +67,11 @@ export default function Home() {
               );
             })}
           </ul>
-
-          <div className="flex justify-center items-center gap-2 mt-6">
-            <button
-              onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="px-3 py-1 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer disabled:cursor-auto"
-            >
-              Previous
-            </button>
-            {[...Array(totalPages)].map((_, index) => {
-              const page = index + 1;
-              return (
-                <button
-                  key={page}
-                  onClick={() => handlePageChange(page)}
-                  className={`px-3 py-1 text-sm font-medium rounded cursor-pointer ${
-                    currentPage === page
-                      ? "bg-gray-500 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {page}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50 cursor-pointer disabled:cursor-auto"
-            >
-              Next
-            </button>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
         </>
       )}
     </section>
